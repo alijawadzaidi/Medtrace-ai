@@ -1,0 +1,44 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# databases
+*.sqlite
+*.sqlite3
+*.db
+
+# build output
+dist/
+build/
+.next/
+out/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.joblib
+*.pkl
+
+# logs
+logs/
+*.log
+npm-debug.log*
+
+# editors / os
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# coverage
+coverage/
+.nyc_output/
