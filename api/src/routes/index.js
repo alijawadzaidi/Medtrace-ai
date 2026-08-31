@@ -5,6 +5,7 @@ const express = require('express');
 const healthRoutes = require('./health.routes');
 const authRoutes = require('./auth.routes');
 const organizationRoutes = require('./organization.routes');
+const catalogueRoutes = require('./catalogue.routes');
 const auditLogRoutes = require('./auditLog.routes');
 
 const router = express.Router();
@@ -12,9 +13,10 @@ const router = express.Router();
 router.use(healthRoutes);
 router.use(authRoutes);
 router.use(organizationRoutes);
+router.use(catalogueRoutes);
 router.use(auditLogRoutes);
 
-// Phase 2 mounts /medicines and /batches, Phase 3 /shipments, Phase 4 /verify.
+// Phase 3 mounts /shipments, Phase 4 mounts public /verify.
 
 router.get('/', (_req, res) => {
   res.json({
@@ -29,6 +31,15 @@ router.get('/', (_req, res) => {
       'PATCH /auth/me',
       'GET  /organizations',
       'GET  /organizations/:id',
+      'GET  /medicines',
+      'POST /medicines (manufacturer)',
+      'GET  /batches',
+      'POST /batches (manufacturer)',
+      'GET  /batches/:id/packs',
+      'GET  /batches/:id/labels',
+      'POST /batches/:id/recall (regulator)',
+      'GET  /packs/:serial',
+      'GET  /packs/:serial/qr.png',
       'GET  /audit-logs (regulator only)',
     ],
   });

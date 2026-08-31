@@ -61,6 +61,18 @@ Then `npm run db:reset`. No application code changes.
 | GET    | `/organizations`     | any role  | Own organization; regulators see all   |
 | GET    | `/organizations/:id` | any role  | 403 across organizations, except regulators |
 | GET    | `/audit-logs`        | regulator | Audit trail, filterable by entity and action |
+| GET    | `/medicines`         | any role  | Own catalogue; regulators see all      |
+| POST   | `/medicines`         | manufacturer | Register a product                  |
+| PATCH  | `/medicines/:id`     | manufacturer | Update own product                  |
+| DELETE | `/medicines/:id`     | manufacturer | Deactivate (never deletes)          |
+| POST   | `/batches`           | manufacturer | Create a batch **and all its packs** |
+| GET    | `/batches`           | any role  | Own batches; regulators see all        |
+| GET    | `/batches/:id`       | any role  | Batch detail with pack completeness    |
+| GET    | `/batches/:id/packs` | any role  | Paginated serial list                  |
+| GET    | `/batches/:id/labels`| any role  | **Print-ready label sheet (HTML)**     |
+| POST   | `/batches/:id/recall`| regulator | Recall a batch                         |
+| GET    | `/packs/:serial`     | any role  | Pack detail (own or held packs only)   |
+| GET    | `/packs/:serial/qr.png` | any role | QR image, rendered on demand        |
 
 ### RBAC matrix
 
@@ -97,6 +109,41 @@ TOKEN=$(curl -s -X POST localhost:4000/auth/login \
 curl -s localhost:4000/organizations -H "Authorization: Bearer $TOKEN"
 ```
 
+## Serialization
+
+Every **pack** gets its own serial, not every batch. If ten thousand packs
+shared one code, photographing one real box would let anyone print ten thousand
+valid fakes, and duplicate-scan detection would be meaningless — thousands of
+honest customers scanning the same code is expected traffic. At pack level, a
+duplicate scan is evidence of a clone.
+
+```
+MT-7K2M9P-XQ4T8HRW2VNB4
+   ^batch  ^random     ^check
+```
+
+- **Unguessable.** 12 random characters (~60 bits). Sequential serials would
+  let anyone enumerate the catalogue and print plausible labels.
+- **Unambiguous.** Crockford base32 omits I, L, O and U, so there is no 1/I or
+  0/O confusion when a human reads a scuffed label. Lookups normalise
+  lowercase and those look-alikes automatically.
+- **Self-checking.** The trailing character rejects most typos before the
+  database is touched — which matters once public verification is exposed.
+
+QR codes are **rendered on demand** from the serial, never stored. Storing a
+PNG per pack would be thousands of files that add nothing.
+
+The QR encodes a *verification URL*, not JSON: any phone camera opens it with
+no app install, and keeping batch details server-side means a fabricated code
+fails on lookup instead of looking plausible offline.
+
+### Batch creation is atomic
+
+`POST /batches` writes the batch and every pack in one transaction. A batch
+holding half its packs would be silently wrong in a way nobody notices until
+the counts stop matching. A batch is capped at **5000 packs**; 5000 generate in
+well under a tenth of a second.
+
 ## Auditing
 
 `db/auditHook.js` registers global `afterCreate` / `afterUpdate` / `afterDestroy`
@@ -109,8 +156,15 @@ Two properties worth knowing:
 
 - **Passwords are never stored in an audit row.** Any field named
   `password`, `passwordHash` or `token` is written as `[redacted]`.
-- **Audit writes are deliberately outside the caller's transaction**, so the
-  record of an attempted change survives a rollback.
+- **Audit rows join the caller's transaction.** An earlier version wrote them
+  on a separate connection so a record would survive a rollback. That
+  deadlocked against the very transaction it audited (`SQLITE_BUSY`, plus a
+  connection-pool risk on MySQL) and silently dropped every write made inside
+  a transaction. Auditing what actually committed is both correct and safe.
+- **Audit failures are fatal.** In a traceability system an unauditable write
+  is not worth keeping, so a failure rolls the whole operation back.
+- **Bulk pack inserts are audited at batch level, not per pack.** 5000 audit
+  rows for one action is noise; the batch row carries the quantity.
 
 Attribution comes from `utils/requestContext.js`, an `AsyncLocalStorage` store
 opened per request. That is why the hooks know who acted without every service

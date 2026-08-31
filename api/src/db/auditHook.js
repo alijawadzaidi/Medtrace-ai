@@ -49,25 +49,28 @@ function registerAuditHooks(sequelize, AuditLog) {
     else if (action === 'update') changes = diffOf(instance);
     else if (action === 'delete') changes = { before: redact(instance.get({ plain: true })) };
 
-    try {
-      await AuditLog.create(
-        {
-          userId: user?.id ?? null,
-          organizationId: user?.organizationId ?? null,
-          action,
-          entity: modelName,
-          entityId: instance.get(instance.constructor.primaryKeyAttribute)?.toString() ?? null,
-          changes,
-          ipAddress: ipAddress ?? null,
-          requestId: requestId ?? null,
-        },
-        // Intentionally outside the caller's transaction: an audit row should
-        // survive a rollback of the operation that triggered it.
-        { audit: false }
-      );
-    } catch (err) {
-      console.error(`[audit] failed to record ${action} on ${modelName}:`, err.message);
-    }
+    // The audit row joins the caller's transaction. An earlier version wrote it
+    // on a separate connection so the record would survive a rollback; that
+    // deadlocks against the very transaction it is auditing (SQLITE_BUSY, and
+    // a pool-exhaustion risk on MySQL), and it silently lost every write made
+    // inside a transaction. Auditing what committed is both correct and safe.
+    //
+    // Failures are fatal on purpose: in a traceability system, an unauditable
+    // write is not a write worth keeping. Because the audit row is now inside
+    // the transaction, throwing here rolls the whole operation back.
+    await AuditLog.create(
+      {
+        userId: user?.id ?? null,
+        organizationId: user?.organizationId ?? null,
+        action,
+        entity: modelName,
+        entityId: instance.get(instance.constructor.primaryKeyAttribute)?.toString() ?? null,
+        changes,
+        ipAddress: ipAddress ?? null,
+        requestId: requestId ?? null,
+      },
+      { transaction: options?.transaction, audit: false }
+    );
   }
 
   sequelize.addHook('afterCreate', (instance, options) => record('create', instance, options));
