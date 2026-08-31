@@ -5,6 +5,13 @@ require('dotenv').config({ quiet: true });
 const dialect = process.env.DB_DIALECT || 'sqlite';
 const logging = process.env.DB_LOGGING === 'true' ? console.log : false;
 
+// Track applied seeders in a table, exactly as migrations are tracked. Without
+// this, `db:seed:all` re-runs every seeder each time and trips unique constraints.
+const seederTracking = {
+  seederStorage: 'sequelize',
+  seederStorageTableName: 'sequelize_seeds',
+};
+
 /**
  * SQLite lets the project run with no database server installed, which keeps
  * `npm run dev` working on a fresh clone. MySQL is the deployment target.
@@ -16,6 +23,7 @@ function build(overrides = {}) {
       dialect: 'sqlite',
       storage: process.env.DB_STORAGE || './medtrace.dev.sqlite',
       logging,
+      ...seederTracking,
       ...overrides,
     };
   }
@@ -33,6 +41,7 @@ function build(overrides = {}) {
       collate: 'utf8mb4_unicode_ci',
     },
     pool: { max: 10, min: 0, idle: 10000 },
+    ...seederTracking,
     ...overrides,
   };
 }

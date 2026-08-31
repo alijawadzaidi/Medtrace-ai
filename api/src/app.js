@@ -7,6 +7,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 
 const routes = require('./routes');
+const requestContext = require('./utils/requestContext');
 const notFound = require('./middleware/notFound');
 const errorHandler = require('./middleware/errorHandler');
 const env = require('./config/env');
@@ -20,6 +21,10 @@ app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Opens the per-request context that the audit hooks read from. Must sit
+// above the routes so every write below it is attributable.
+app.use(requestContext.middleware());
 
 if (!env.isTest) {
   app.use(morgan(env.isProduction ? 'combined' : 'dev'));

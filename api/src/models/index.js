@@ -24,4 +24,8 @@ Object.values(db)
   .filter((model) => typeof model?.associate === 'function')
   .forEach((model) => model.associate(db));
 
+// Global audit hooks. Registered after every model exists so that models added
+// in later phases are covered with no change here.
+require('../db/auditHook')(sequelize, db.AuditLog);
+
 module.exports = db;
