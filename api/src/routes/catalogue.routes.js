@@ -70,5 +70,13 @@ router.post(
 // -------------------------------------------------------------------- packs
 router.get('/packs/:serial', requireAuth, asyncHandler(packs.getBySerial));
 router.get('/packs/:serial/qr.png', requireAuth, asyncHandler(packs.qrImage));
+router.get('/packs/:serial/history', requireAuth, asyncHandler(packs.history));
+
+router.post(
+  '/packs/:serial/dispense',
+  requireAuth,
+  requireRole('pharmacy'),
+  asyncHandler(packs.dispense)
+);
 
 module.exports = router;

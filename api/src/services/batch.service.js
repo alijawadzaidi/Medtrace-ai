@@ -1,6 +1,6 @@
 'use strict';
 
-const { sequelize, Batch, Pack, Medicine } = require('../models');
+const { sequelize, Batch, Pack, Medicine, Organization, ScanEvent } = require('../models');
 const serialService = require('./serial.service');
 const ApiError = require('../utils/ApiError');
 const requestContext = require('../utils/requestContext');
@@ -67,8 +67,32 @@ async function createBatchWithPacks({ medicineId, batchNo, manufacturedOn, expir
     // bulkCreate without individualHooks deliberately skips the per-row audit
     // hook: 5000 audit rows for one action is noise, not a trail. The batch
     // creation above is audited, and it carries the quantity.
+    const created = [];
     for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
-      await Pack.bulkCreate(rows.slice(i, i + INSERT_CHUNK), { transaction });
+      const chunk = await Pack.bulkCreate(rows.slice(i, i + INSERT_CHUNK), {
+        transaction,
+        returning: true,
+      });
+      created.push(...chunk);
+    }
+
+    // Every pack's history must start at manufacture. Without a 'created'
+    // event the chain has no origin, and the detector cannot measure the time
+    // or distance from the factory to the first custody change.
+    const organization = await Organization.findByPk(actor.organizationId, { transaction });
+    const eventRows = created.map((pack) => ({
+      packId: pack.id,
+      type: 'created',
+      organizationId: organization?.id ?? null,
+      userId: actor.id,
+      latitude: organization?.latitude ?? null,
+      longitude: organization?.longitude ?? null,
+      // The model's setter serialises this; pre-stringifying would nest it.
+      metadata: { batchNo, quantity },
+      createdAt: now,
+    }));
+    for (let i = 0; i < eventRows.length; i += INSERT_CHUNK) {
+      await ScanEvent.bulkCreate(eventRows.slice(i, i + INSERT_CHUNK), { transaction });
     }
 
     return batch;

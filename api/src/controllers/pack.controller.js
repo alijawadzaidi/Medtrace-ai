@@ -1,6 +1,7 @@
 'use strict';
 
-const { Pack, Batch, Medicine, Organization } = require('../models');
+const { Pack, Batch, Medicine, Organization, ScanEvent } = require('../models');
+const shipmentService = require('../services/shipment.service');
 const qrService = require('../services/qr.service');
 const serialService = require('../services/serial.service');
 const ApiError = require('../utils/ApiError');
@@ -68,4 +69,60 @@ async function qrImage(req, res) {
   res.send(png);
 }
 
-module.exports = { getBySerial, qrImage, findBySerialOrFail };
+/**
+ * The chain of custody for one pack, oldest first. This is the view a
+ * regulator inspects, and the same data the customer-facing page will render
+ * in Phase 4.
+ */
+async function history(req, res) {
+  const pack = await findBySerialOrFail(req.params.serial);
+
+  if (req.user.role !== 'regulator') {
+    const involved =
+      Number(pack.batch.manufacturerId) === Number(req.user.organizationId) ||
+      Number(pack.currentOrganizationId) === Number(req.user.organizationId);
+    if (!involved) throw ApiError.forbidden('That pack has not passed through your organization');
+  }
+
+  const events = await ScanEvent.findAll({
+    where: { packId: pack.id },
+    include: [{ model: Organization, as: 'organization', attributes: ['id', 'name', 'type', 'city'] }],
+    order: [['createdAt', 'ASC'], ['id', 'ASC']],
+  });
+
+  res.json({
+    pack: {
+      serial: pack.serial,
+      state: pack.state,
+      batchNo: pack.batch.batchNo,
+      medicine: pack.batch.medicine.name,
+      currentHolder: pack.currentOrganization?.name ?? null,
+    },
+    batchRecalled: pack.batch.status === 'recalled',
+    expired: pack.batch.isExpired(),
+    eventCount: events.length,
+    history: events.map((e) => ({
+      at: e.createdAt,
+      type: e.type,
+      organization: e.organization
+        ? { id: e.organization.id, name: e.organization.name, type: e.organization.type, city: e.organization.city }
+        : null,
+      location: e.latitude != null ? { latitude: e.latitude, longitude: e.longitude } : null,
+      shipmentId: e.shipmentId,
+      metadata: e.metadata,
+    })),
+  });
+}
+
+/** Terminal step: a pharmacy hands the pack to a patient. */
+async function dispense(req, res) {
+  const pack = await findBySerialOrFail(req.params.serial);
+  await shipmentService.dispensePack(pack, req.user);
+
+  res.json({
+    pack: { serial: pack.serial, state: pack.state, dispensedAt: pack.dispensedAt },
+    note: 'This pack is now dispensed. Any further movement is a chain-of-custody violation.',
+  });
+}
+
+module.exports = { getBySerial, qrImage, history, dispense, findBySerialOrFail };

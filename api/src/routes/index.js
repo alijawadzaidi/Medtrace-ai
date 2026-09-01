@@ -6,6 +6,7 @@ const healthRoutes = require('./health.routes');
 const authRoutes = require('./auth.routes');
 const organizationRoutes = require('./organization.routes');
 const catalogueRoutes = require('./catalogue.routes');
+const shipmentRoutes = require('./shipment.routes');
 const auditLogRoutes = require('./auditLog.routes');
 
 const router = express.Router();
@@ -14,9 +15,10 @@ router.use(healthRoutes);
 router.use(authRoutes);
 router.use(organizationRoutes);
 router.use(catalogueRoutes);
+router.use(shipmentRoutes);
 router.use(auditLogRoutes);
 
-// Phase 3 mounts /shipments, Phase 4 mounts public /verify.
+// Phase 4 mounts the public, unauthenticated /verify endpoint.
 
 router.get('/', (_req, res) => {
   res.json({
@@ -40,6 +42,13 @@ router.get('/', (_req, res) => {
       'POST /batches/:id/recall (regulator)',
       'GET  /packs/:serial',
       'GET  /packs/:serial/qr.png',
+      'GET  /packs/:serial/history',
+      'POST /packs/:serial/dispense (pharmacy)',
+      'GET  /shipments',
+      'POST /shipments (manufacturer, distributor)',
+      'POST /shipments/:id/dispatch',
+      'POST /shipments/:id/receive',
+      'POST /shipments/:id/cancel',
       'GET  /audit-logs (regulator only)',
     ],
   });

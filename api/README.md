@@ -73,6 +73,14 @@ Then `npm run db:reset`. No application code changes.
 | POST   | `/batches/:id/recall`| regulator | Recall a batch                         |
 | GET    | `/packs/:serial`     | any role  | Pack detail (own or held packs only)   |
 | GET    | `/packs/:serial/qr.png` | any role | QR image, rendered on demand        |
+| GET    | `/packs/:serial/history` | any role | Full chain of custody               |
+| POST   | `/packs/:serial/dispense` | pharmacy | Terminal step — hand to a patient  |
+| GET    | `/shipments`         | any role  | Own inbound + outbound; regulators all |
+| GET    | `/shipments/:id`     | any role  | Shipment detail with its packs         |
+| POST   | `/shipments`         | manufacturer, distributor | Create a draft         |
+| POST   | `/shipments/:id/dispatch` | sender | Packs leave — state `in_transit`  |
+| POST   | `/shipments/:id/receive` | destination | Packs arrive — custody moves  |
+| POST   | `/shipments/:id/cancel` | sender  | Draft only                          |
 
 ### RBAC matrix
 
@@ -143,6 +151,57 @@ fails on lookup instead of looking plausible offline.
 holding half its packs would be silently wrong in a way nobody notices until
 the counts stop matching. A batch is capped at **5000 packs**; 5000 generate in
 well under a tenth of a second.
+
+## Chain of custody
+
+Custody is a state machine, enforced on every movement. It is the cheapest
+effective anti-counterfeit control in the system: without it a pack can appear
+at a pharmacy having never left the factory, and the record looks ordinary.
+
+```
+created ──► in_transit ──► received ──┬──► dispensed   (terminal)
+                              ▲       ├──► destroyed   (terminal)
+                              └───────┘  (forwarded onward)
+```
+
+Shipping routes are constrained by organization type as well:
+
+| From         | May ship to              |
+| ------------ | ------------------------ |
+| manufacturer | distributor, pharmacy    |
+| distributor  | distributor, pharmacy    |
+| pharmacy     | — (may not dispatch)     |
+| regulator    | — (observes only)        |
+
+Enforced on every transfer: only the current holder may dispatch; only the
+named destination may receive; a pack cannot sit on two open shipments; packs
+from a recalled batch cannot move; expired packs cannot be dispensed.
+
+## Scan events
+
+`scan_events` is append-only — never updated, never deleted — and does three
+jobs at once:
+
+1. the chain-of-custody trail a regulator inspects
+2. the history a customer sees after scanning a QR code (Phase 4)
+3. the feature source the anomaly detector trains on (Phase 6)
+
+Every event carries coordinates, taken from the acting organization, because
+implied travel speed between consecutive events is the strongest single signal
+that a serial has been cloned.
+
+```
+created     Meridian Pharmaceuticals   Mumbai      19.076, 72.878
+dispatched  Meridian Pharmaceuticals   Mumbai      19.076, 72.878
+received    Northgate Medical          Delhi       28.614, 77.209
+dispatched  Northgate Medical          Delhi       28.614, 77.209
+received    Lotus Pharmacy             Delhi       28.535, 77.391
+dispensed   Lotus Pharmacy             Delhi       28.535, 77.391
+```
+
+Movements are bulk operations: a 2000-pack shipment writes 2000 scan events
+and updates 2000 packs in roughly 50 ms, and produces **one** audit row rather
+than 2000.
 
 ## Auditing
 
