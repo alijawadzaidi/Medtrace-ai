@@ -173,7 +173,13 @@ async function isRepeatScan(packId, truncatedIp, position, transaction) {
   // network but 400 km apart mean either a spoofed position or a cloned pack,
   // and discarding the second event would erase the only trace of it.
   const moved = geo.distanceKm(previous, position);
-  if (moved != null && moved > DEDUPE_RADIUS_KM) return false;
+  if (moved != null) return moved <= DEDUPE_RADIUS_KM;
+
+  // The two cannot be compared. A positioned scan is never redundant against
+  // an unpositioned one: the customer declined the location prompt the first
+  // time and allowed it the second, and that second event is strictly the more
+  // useful of the two to keep.
+  if (position && previous.latitude == null) return false;
 
   return true;
 }
@@ -307,7 +313,10 @@ async function verify(rawSerial, { position = null, ipAddress = null, userAgent 
         ? { name: pack.currentOrganization.name, type: pack.currentOrganization.type, city: pack.currentOrganization.city }
         : null,
       dispensedAt: pack.dispensedAt,
-      timesVerified: pack.scanCount + (repeat ? 0 : 1),
+      // `pack.update` above mutates the instance, so this is already the new
+      // total when the scan counted, and the unchanged one when it did not.
+      // Adding 1 here as well reported every first scan as the second.
+      timesVerified: pack.scanCount,
     },
     warnings,
     journey: publicJourney(events),
