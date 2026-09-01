@@ -21,7 +21,7 @@ Then: <http://localhost:4000/health>
 | `npm start`           | plain node                                 |
 | `npm run lint`        | ESLint (flat config)                       |
 | `npm run db:migrate`  | apply pending migrations                   |
-| `npm run db:seed`     | insert demo organizations                  |
+| `npm run db:seed`     | insert demo organizations, users, catalogue and a supply chain |
 | `npm run db:reset`    | rebuild the database from scratch          |
 
 `db:reset` undoes **seeders first**, then migrations. Seeder runs are tracked in
@@ -64,6 +64,7 @@ Then `npm run db:reset`. No application code changes.
 | GET    | `/auth/me`           | any role  | Current user and organization          |
 | PATCH  | `/auth/me`           | any role  | Update own name or password            |
 | GET    | `/organizations`     | any role  | Own organization; regulators see all   |
+| GET    | `/organizations/partners` | any role | Who you may legally ship to |
 | GET    | `/organizations/:id` | any role  | 403 across organizations, except regulators |
 | GET    | `/audit-logs`        | regulator | Audit trail, filterable by entity and action |
 | GET    | `/medicines`         | any role  | Own catalogue; regulators see all      |
@@ -103,6 +104,25 @@ Regulators are the deliberate exception to organization scoping — oversight is
 their entire purpose. Everyone else is confined to their own organization by
 `scopeToOrganization` / `assertCanAccessOrganization` in `middleware/auth.js`.
 
+## Demo data has a past
+
+The supply-chain seeder backdates everything it creates: packs are manufactured
+six weeks ago, move through a distributor, and sit on a pharmacy shelf for a
+week before anyone scans them.
+
+That is not decoration. The anomaly rules compare *implied speed* between
+consecutive events, so data born the moment `db:seed` runs makes every pack
+look cloned — a box manufactured in Mumbai ninety seconds ago cannot legally be
+in a customer's hand anywhere else, and every scan comes back `suspect`. With a
+backdated history the same scan reads `genuine`, and a genuinely impossible
+journey stands out against it.
+
+The seeder writes rows directly rather than calling the services, because the
+whole point is to control `created_at`, and it runs in a single transaction:
+it writes to six tables in dependency order, and a seeder that fails halfway is
+never recorded as having run, so its `down` never cleans up — the orphans then
+block every later revert with a foreign-key error.
+
 ## Demo accounts
 
 Seeded by `npm run db:seed`. Password for all of them: `MedTrace#2026`
@@ -124,6 +144,16 @@ TOKEN=$(curl -s -X POST localhost:4000/auth/login \
 
 curl -s localhost:4000/organizations -H "Authorization: Bearer $TOKEN"
 ```
+
+## Shipping partners
+
+Organization scoping says a distributor sees only itself, which is right for
+records and impossible for shipping: you cannot address a shipment to an
+organization you are not allowed to know exists. `GET /organizations/partners`
+is that directory, deliberately narrow in two ways. It returns only the *types*
+the custody rules permit as a destination — so a pharmacy, which may not
+dispatch at all, gets an empty list — and only what an address label needs:
+name, type, city. Never licence numbers, coordinates, or counts of anything.
 
 ## Public verification
 
