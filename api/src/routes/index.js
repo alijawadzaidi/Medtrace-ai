@@ -8,6 +8,7 @@ const organizationRoutes = require('./organization.routes');
 const catalogueRoutes = require('./catalogue.routes');
 const shipmentRoutes = require('./shipment.routes');
 const verifyRoutes = require('./verify.routes');
+const alertRoutes = require('./alert.routes');
 const auditLogRoutes = require('./auditLog.routes');
 
 const router = express.Router();
@@ -18,6 +19,7 @@ router.use(organizationRoutes);
 router.use(catalogueRoutes);
 router.use(shipmentRoutes);
 router.use(verifyRoutes);
+router.use(alertRoutes);
 router.use(auditLogRoutes);
 
 router.get('/', (_req, res) => {
@@ -52,6 +54,9 @@ router.get('/', (_req, res) => {
       'GET  /verify/:serial (public, no login)',
       'POST /verify (public, with browser coordinates)',
       'GET  /verify/:serial/qr.png (public)',
+      'GET  /alerts (regulator only)',
+      'PATCH /alerts/:id (regulator only)',
+      'POST /detection/run (regulator only)',
       'GET  /audit-logs (regulator only)',
     ],
   });

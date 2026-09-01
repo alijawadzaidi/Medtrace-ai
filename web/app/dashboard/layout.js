@@ -22,6 +22,7 @@ const TABS = [
   { href: '/dashboard/batches', label: 'Batches', roles: ['manufacturer', 'regulator'] },
   { href: '/dashboard/shipments', label: 'Shipments', roles: ['manufacturer', 'distributor', 'pharmacy', 'regulator'] },
   { href: '/dashboard/packs', label: 'Look up a pack', roles: ['manufacturer', 'distributor', 'pharmacy', 'regulator'] },
+  { href: '/dashboard/alerts', label: 'Alerts', roles: ['regulator'] },
   { href: '/dashboard/audit', label: 'Audit trail', roles: ['regulator'] },
 ];
 

@@ -1,0 +1,49 @@
+{
+  "true_positives": 13,
+  "false_positives": 9,
+  "false_negatives": 7,
+  "true_negatives": 241,
+  "precision": 0.5909,
+  "recall": 0.65,
+  "f1": 0.619,
+  "support": {
+    "test_rows": 270,
+    "test_fraud": 20
+  },
+  "per_pattern": {
+    "cloned_serial": {
+      "in_test": 2,
+      "detected": 0,
+      "recall": 0.0
+    },
+    "custody_skip": {
+      "in_test": 4,
+      "detected": 0,
+      "recall": 0.0
+    },
+    "expired_relabel": {
+      "in_test": 3,
+      "detected": 3,
+      "recall": 1.0
+    },
+    "grey_market_diversion": {
+      "in_test": 6,
+      "detected": 5,
+      "recall": 0.8333
+    },
+    "mass_cloning": {
+      "in_test": 5,
+      "detected": 5,
+      "recall": 1.0
+    }
+  },
+  "flagged_feature_deviation": {
+    "scan_count": 3.0,
+    "distinct_regions": 2.0,
+    "days_to_expiry": 1.079,
+    "max_speed_kmh": 1.04,
+    "custody_hops": 1.0,
+    "dwell_variance": 0.28,
+    "batch_scan_entropy": 0.22
+  }
+}

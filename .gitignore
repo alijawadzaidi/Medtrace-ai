@@ -25,8 +25,18 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# Regenerable artifacts. The pipeline is four commands and fully seeded, so
+# the repo keeps the *results* (ai/metrics.json, sim/evaluation.json) and
+# regenerates the inputs rather than carrying a 3 MB model and a labelled CSV:
+#   node sim/generate.js --seed 20260901 --reset
+#   node sim/export-features.js
+#   ai/.venv/bin/python ai/train.py
+#   node sim/evaluate.js
 *.joblib
 *.pkl
+ai/data/*.csv
+sim/labels.json
 
 # logs
 logs/

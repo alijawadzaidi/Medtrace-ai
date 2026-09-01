@@ -1,6 +1,8 @@
 'use strict';
 
 const verificationService = require('../services/verification.service');
+const detection = require('../services/detection.service');
+const { Pack } = require('../models');
 const qrService = require('../services/qr.service');
 const serialService = require('../services/serial.service');
 const geo = require('../services/geo.service');
@@ -20,6 +22,27 @@ function scanContextFrom(req, body = {}) {
 }
 
 /**
+ * Runs the detector over the pack that was just scanned, *after* the customer
+ * already has their answer.
+ *
+ * A public scan is the moment new evidence arrives, so it is the right trigger
+ * — but the customer must never wait for it. The verdict they see comes from
+ * the fast deterministic checks inside `verify`; this writes the durable alert
+ * a regulator will triage. Failures are swallowed on purpose: a detector that
+ * can break verification is worse than no detector.
+ */
+function detectInBackground(serial) {
+  Promise.resolve()
+    .then(async () => {
+      const pack = await Pack.findOne({ where: { serial }, attributes: ['id'] });
+      if (pack) await detection.evaluatePacks([pack.id]);
+    })
+    .catch((error) => {
+      console.error('[detection] scoring after a public scan failed:', error.message);
+    });
+}
+
+/**
  * GET /verify/:serial — what a phone camera lands on.
  *
  * The QR encodes a URL, so the customer arrives here with no app and no
@@ -33,6 +56,8 @@ async function verifyBySerial(req, res) {
   // caching this response would erase exactly the signal the detector needs.
   res.set('Cache-Control', 'no-store');
   res.json(result);
+
+  if (result.verdict !== 'counterfeit') detectInBackground(result.serial);
 }
 
 /** POST /verify — the same check, with browser-granted coordinates attached. */
@@ -42,6 +67,8 @@ async function verifyWithPosition(req, res) {
 
   res.set('Cache-Control', 'no-store');
   res.json(result);
+
+  if (result.verdict !== 'counterfeit') detectInBackground(result.serial);
 }
 
 /**

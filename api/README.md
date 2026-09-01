@@ -67,6 +67,10 @@ Then `npm run db:reset`. No application code changes.
 | GET    | `/organizations/partners` | any role | Who you may legally ship to |
 | GET    | `/organizations/:id` | any role  | 403 across organizations, except regulators |
 | GET    | `/audit-logs`        | regulator | Audit trail, filterable by entity and action |
+| GET    | `/alerts`            | regulator | Triage queue, worst first              |
+| PATCH  | `/alerts/:id`        | regulator | Confirm, dismiss, or take up an alert  |
+| POST   | `/detection/run`     | regulator | Score every pack, or one batch         |
+| GET    | `/detection/health`  | regulator | Is the model reachable                 |
 | GET    | `/medicines`         | any role  | Own catalogue; regulators see all      |
 | POST   | `/medicines`         | manufacturer | Register a product                  |
 | PATCH  | `/medicines/:id`     | manufacturer | Update own product                  |
@@ -315,6 +319,74 @@ dispensed   Lotus Pharmacy             Delhi       28.535, 77.391
 Movements are bulk operations: a 2000-pack shipment writes 2000 scan events
 and updates 2000 packs in roughly 50 ms, and produces **one** audit row rather
 than 2000.
+
+## Detection
+
+Two things write into `alerts`, and keeping them in one table is what makes the
+comparison in the report possible.
+
+**Deterministic rules** catch what is definitionally wrong. They are cheap, and
+every alert they raise explains itself: *"this pack moved 1,400 km in 20
+minutes"* is an answer a customer, a pharmacist and an examiner all understand,
+where *"anomaly score 0.83"* is not.
+
+| Rule | Severity | Fires when |
+| ---- | -------- | ---------- |
+| `impossible_travel` | critical | Implied velocity above 900 km/h between consecutive scans |
+| `dispensed_elsewhere` | critical | A dispensed pack is verified more than 25 km away afterwards |
+| `recalled_in_circulation` | critical | A recalled pack is still held in the chain |
+| `custody_skip` | warning | A pack is received with no record of anyone dispatching it |
+| `expired_stock` | warning | An expired pack is still moving |
+| `scan_storm` | warning | Verifications reach 5× the batch median (floor of 5) |
+
+**The model** catches the shapes nobody wrote a rule for. It runs in a separate
+stateless Python service (see [`../ai/README.md`](../ai/README.md)) and is
+called through `services/scoring.service.js`, which returns `null` — never a
+fabricated score — when the service cannot be reached. "No risk score
+available" is honest; a made-up 0.5 would end up in an alert a regulator acts
+on.
+
+Measured over the simulator's 900 labelled packs, the rules reach 1.00
+precision at 0.78 recall, the model 0.60 at 0.70, and together 0.66 at **0.94**
+recall. They find different frauds — the model never catches a custody skip,
+the rules barely catch grey-market diversion. Full tables in
+[`../sim/README.md`](../sim/README.md).
+
+### Features
+
+`services/features.service.js` computes the seven-feature vector, and is the
+only place that does. The training export calls the same function, so the
+vector a model is trained on and the vector it is scored with cannot drift
+apart — a separate training-time implementation is the classic way a model that
+evaluated beautifully performs badly in production.
+
+Features travel to the scorer as **named objects, never positional arrays**,
+and the request carries a `feature_version`. A reordered array is how a model
+quietly starts reading `scan_count` as `days_to_expiry`.
+
+### Alerts are regulator-only
+
+That is a deliberate line, not an oversight. An alert is an accusation about a
+specific organization's handling of a specific pack, and the party being
+accused must not be the party who can dismiss it — a manufacturer able to close
+"recalled stock still in circulation" on its own batch is a detector that
+reports whatever the accused prefers.
+
+### One open alert per pack per rule
+
+Detection re-runs constantly: after every public scan, plus the regulator's
+sweep. Without deduplication a single cloned pack scanned four hundred times
+becomes four hundred identical alerts, and a triage queue nobody can use is the
+same as no detector at all. An existing open alert is sharpened instead —
+newest score, newest evidence.
+
+### Scoring after a public scan never blocks the customer
+
+A public scan is the moment new evidence arrives, so it is the right trigger.
+But the verdict the customer sees comes from the fast in-request checks; the
+durable alert is written after the response has already been sent, and a
+failure there is logged and swallowed. A detector that can break verification
+is worse than no detector.
 
 ## Auditing
 

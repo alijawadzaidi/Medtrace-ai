@@ -1,0 +1,10 @@
+# Pinned for Python 3.9, which is what this machine ships with. scikit-learn
+# 1.7 and pandas 2.3 both require 3.10+, so the versions below are the newest
+# that still run here. Nothing in the code depends on a newer API.
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.4
+scikit-learn==1.6.1
+pandas==2.2.3
+numpy==1.26.4
+joblib==1.4.2
