@@ -10,8 +10,8 @@ See [`docs/medtrace-plan.md`](docs/medtrace-plan.md) for the full build plan.
 
 | Path    | Contents                                                    | Status        |
 | ------- | ----------------------------------------------------------- | ------------- |
-| `api/`  | Express + Sequelize REST API                                | Phase 0 done  |
-| `web/`  | Next.js dashboards, camera scanner, public verification page | Phase 5       |
+| `api/`  | Express + Sequelize REST API                                | Phases 0–4 done |
+| `web/`  | Next.js dashboards, camera scanner, public verification page | Phase 5 (next) |
 | `ai/`   | FastAPI anomaly-scoring service                             | Phase 6       |
 | `sim/`  | Supply-chain event simulator                                | Phase 6       |
 | `docs/` | Build plan, ER diagram, API reference                       | ongoing       |

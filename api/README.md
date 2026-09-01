@@ -7,7 +7,7 @@ Express + Sequelize backend for MedTrace AI.
 ```bash
 npm install
 cp .env.example .env
-npm run db:reset   # undo all -> migrate -> seed
+npm run db:reset   # undo seeds + migrations -> migrate -> seed
 npm run dev
 ```
 
@@ -23,6 +23,11 @@ Then: <http://localhost:4000/health>
 | `npm run db:migrate`  | apply pending migrations                   |
 | `npm run db:seed`     | insert demo organizations                  |
 | `npm run db:reset`    | rebuild the database from scratch          |
+
+`db:reset` undoes **seeders first**, then migrations. Seeder runs are tracked in
+`sequelize_seeds`, and that table is not owned by any migration — so undoing
+only the migrations left the tracking rows behind and `db:seed:all` then
+reported "No seeders found" against an empty database.
 
 ## Database
 
@@ -81,6 +86,9 @@ Then `npm run db:reset`. No application code changes.
 | POST   | `/shipments/:id/dispatch` | sender | Packs leave — state `in_transit`  |
 | POST   | `/shipments/:id/receive` | destination | Packs arrive — custody moves  |
 | POST   | `/shipments/:id/cancel` | sender  | Draft only                          |
+| GET    | `/verify/:serial`    | **none** | Public verification — what a QR scan opens |
+| POST   | `/verify`            | **none** | Same, with browser-granted coordinates |
+| GET    | `/verify/:serial/qr.png` | **none** | QR image for a printed label       |
 
 ### RBAC matrix
 
@@ -116,6 +124,81 @@ TOKEN=$(curl -s -X POST localhost:4000/auth/login \
 
 curl -s localhost:4000/organizations -H "Authorization: Bearer $TOKEN"
 ```
+
+## Public verification
+
+`/verify` is the only unauthenticated surface in the system, and deliberately
+so. A customer holding a box is the last line of defence against a counterfeit,
+and any friction between them and an answer means they will not check. No
+account, no app: the QR opens a page, the page shows a verdict.
+
+```bash
+curl -s localhost:4000/verify/MT-7K2M9P-XQ4T8HRW2VNB4
+```
+
+Three rules shape the response.
+
+- **The catalogue never leaks.** The reply describes *this* serial and where it
+  has been. It never reveals how many packs exist, what other serials look
+  like, or any staff-only field.
+- **An unknown serial is an answer, not an error.** It returns `200` with a
+  `counterfeit` verdict. A `404` would tell a counterfeiter which guesses were
+  closer and tell a worried customer nothing.
+- **Every scan is evidence.** Each call appends a `verified` scan event with no
+  organization and no user — an absence that is itself a feature the detector
+  reads. Responses are `Cache-Control: no-store`; caching them would erase the
+  duplicate-scan signal the whole project rests on.
+
+### Verdicts
+
+Reported worst-first: the first that applies wins.
+
+| Verdict | Severity | Means |
+| ------- | -------- | ----- |
+| `counterfeit` | critical | Malformed serial, or no pack carries it |
+| `recalled`    | critical | Genuine pack, batch withdrawn by the regulator |
+| `suspect`     | critical | Registered, but the scan history is not physically possible |
+| `expired`     | warning  | Genuine, past its expiry date |
+| `dispensed`   | warning  | Already handed to a patient — a sealed box scanning this way is a copied label |
+| `genuine`     | ok       | Registered, in date, journey intact |
+
+### Rules that run on every scan
+
+The Isolation Forest in Phase 6 scores subtler patterns but cannot explain
+itself. *"This pack moved 1,400 km in 20 minutes"* is an answer a customer, a
+pharmacist and an examiner all understand, and it costs one query.
+
+| Code | Severity | Trigger |
+| ---- | -------- | ------- |
+| `impossible_travel` | critical | Implied velocity above 900 km/h over more than 100 km |
+| `scan_storm`        | warning  | 25+ verifications of one pack — a label photographed and reprinted |
+| `already_dispensed` | warning  | The pack is already recorded as dispensed |
+
+### Location and privacy
+
+Coordinates come from the browser when the customer grants permission, and from
+CDN headers otherwise. Both are rounded to two decimal places (~1.1 km) before
+storage, and the IP address is truncated to its network (`/24` for IPv4, `/48`
+for IPv6). That keeps every feature the detector needs — implied travel speed,
+distinct regions, repeat-origin grouping — and discards everything that would
+turn `scan_events` into a log of who scanned what. Public scans write no audit
+row: the scan event *is* the record, and the audit table is for staff actions.
+
+### Anti-abuse
+
+Two different abuses need two different defences:
+
+- **Enumeration.** 60 bits of serial randomness already makes guessing
+  hopeless; a 30-request-per-minute per-IP limit makes it pointless. The check
+  character rejects a typo or a guess *before* the database is touched.
+- **Scan-count inflation.** Hammering a real serial to trip the scan-storm rule
+  and bury a genuine pack in false alerts. Repeat scans of one serial from one
+  network inside 10 minutes are answered but recorded once — otherwise a
+  customer refreshing the page trains the detector on an artefact of the UI.
+
+  With one exception: a repeat from **more than 25 km away** is always
+  recorded. That is not a refresh, it is the precise evidence this system
+  exists to capture.
 
 ## Serialization
 

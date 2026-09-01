@@ -7,6 +7,7 @@ const authRoutes = require('./auth.routes');
 const organizationRoutes = require('./organization.routes');
 const catalogueRoutes = require('./catalogue.routes');
 const shipmentRoutes = require('./shipment.routes');
+const verifyRoutes = require('./verify.routes');
 const auditLogRoutes = require('./auditLog.routes');
 
 const router = express.Router();
@@ -16,9 +17,8 @@ router.use(authRoutes);
 router.use(organizationRoutes);
 router.use(catalogueRoutes);
 router.use(shipmentRoutes);
+router.use(verifyRoutes);
 router.use(auditLogRoutes);
-
-// Phase 4 mounts the public, unauthenticated /verify endpoint.
 
 router.get('/', (_req, res) => {
   res.json({
@@ -49,6 +49,9 @@ router.get('/', (_req, res) => {
       'POST /shipments/:id/dispatch',
       'POST /shipments/:id/receive',
       'POST /shipments/:id/cancel',
+      'GET  /verify/:serial (public, no login)',
+      'POST /verify (public, with browser coordinates)',
+      'GET  /verify/:serial/qr.png (public)',
       'GET  /audit-logs (regulator only)',
     ],
   });
