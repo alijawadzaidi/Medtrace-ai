@@ -5,7 +5,8 @@ Every pack of medicine carries its own serial and QR code, so a duplicate scan i
 evidence of a clone rather than ordinary traffic.
 
 See [`docs/medtrace-plan.md`](docs/medtrace-plan.md) for the full build plan,
-[`docs/deployment.md`](docs/deployment.md) for how it is deployed, and
+[`docs/deployment.md`](docs/deployment.md) for how it is deployed,
+[`docs/demo-runbook.md`](docs/demo-runbook.md) for the rehearsed demo, and
 [`docs/erd.md`](docs/erd.md) for the database schema.
 
 ## Structure
