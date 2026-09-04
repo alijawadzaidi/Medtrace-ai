@@ -252,3 +252,40 @@ describe('alert triage', () => {
     expect(response.body.available).toBe(false);
   });
 });
+
+describe('same-instant contradictions', () => {
+  let world;
+
+  beforeAll(async () => {
+    world = await createWorld();
+  });
+
+  it('never reports a sentinel speed as a real number', async () => {
+    const { serials } = await createBatch(world, { quantity: 1 });
+    const pack = await db.Pack.findOne({ where: { serial: serials[0] } });
+
+    // Two positions, one instant: a contradiction, not a velocity. This shape
+    // reached a regulator as "implies a travel speed of 9007199254740991 km/h",
+    // which says nothing except that something is broken.
+    const at = new Date();
+    for (const org of [world.orgs.maker, world.orgs.pharmacy]) {
+      await db.ScanEvent.create({
+        packId: pack.id,
+        type: 'verified',
+        latitude: org.latitude,
+        longitude: org.longitude,
+        createdAt: at,
+      });
+    }
+
+    const vector = await features.computeForPack(pack.id);
+    expect(vector.max_speed_kmh).toBeLessThanOrEqual(1000000);
+
+    await detection.evaluatePacks([pack.id]);
+    const alert = await db.Alert.findOne({ where: { packId: pack.id, rule: 'impossible_travel' } });
+
+    expect(alert).not.toBeNull();
+    expect(alert.summary).toMatch(/two different places at the same moment/);
+    expect(alert.summary).not.toMatch(/\d{7,}/);
+  });
+});

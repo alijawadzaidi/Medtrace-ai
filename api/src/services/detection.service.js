@@ -55,10 +55,16 @@ function evaluateRules({ vector, pack, batch, events }) {
   const found = [];
 
   if (vector.max_speed_kmh > IMPOSSIBLE_SPEED_KMH) {
+    // The same-instant case is a contradiction rather than a velocity, and
+    // saying so is far more use to a regulator than any number would be.
+    const sameInstant = vector.max_speed_kmh >= geo.SAME_INSTANT_KMH;
+
     found.push({
       rule: 'impossible_travel',
       severity: 'critical',
-      summary: `Pack ${pack.serial} implies a travel speed of ${Math.round(vector.max_speed_kmh)} km/h between consecutive scans — faster than a passenger aircraft.`,
+      summary: sameInstant
+        ? `Pack ${pack.serial} was recorded in two different places at the same moment — one of those records cannot be true.`
+        : `Pack ${pack.serial} implies a travel speed of ${Math.round(vector.max_speed_kmh)} km/h between consecutive scans — faster than a passenger aircraft.`,
     });
   }
 

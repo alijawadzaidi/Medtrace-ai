@@ -94,11 +94,13 @@ function maxSpeedKmh(events) {
         at: positioned[i].createdAt,
       }
     );
-    if (speed != null && Number.isFinite(speed) && speed > max) max = speed;
-    // MAX_SAFE_INTEGER is geo's "same instant, different places". Treat it as a
-    // large but finite speed so the model sees a number rather than an outlier
-    // that swamps every other feature.
-    if (speed === Number.MAX_SAFE_INTEGER) max = Math.max(max, 5000);
+    // Capped before comparing, not after: the previous version tested
+    // `Number.isFinite` first, which accepts the same-instant sentinel because
+    // it *is* finite, so the cap below it never ran and the raw sentinel
+    // reached both the model and the alert text.
+    if (speed != null && Number.isFinite(speed)) {
+      max = Math.max(max, Math.min(speed, geo.SAME_INSTANT_KMH));
+    }
   }
   return Math.round(max * 100) / 100;
 }

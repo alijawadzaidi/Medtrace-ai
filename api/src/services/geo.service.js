@@ -124,6 +124,18 @@ function distanceKm(a, b) {
 }
 
 /**
+ * Two events at the same instant in different places are not a speed, they are
+ * a contradiction — no division produces a meaningful number. This constant
+ * stands in for that case: finite, so it survives JSON and comparisons, and
+ * far enough above any real velocity that callers can recognise it.
+ *
+ * It must never reach a human as a number. `MAX_SAFE_INTEGER` used to be used
+ * here and produced the alert "implies a travel speed of 9007199254740991
+ * km/h", which tells a regulator nothing except that something is broken.
+ */
+const SAME_INSTANT_KMH = 1_000_000;
+
+/**
  * Implied velocity between two positioned events. The single strongest signal
  * that one serial exists in two places: a genuine pack cannot outrun a plane.
  */
@@ -133,15 +145,14 @@ function impliedSpeedKmh(from, to) {
 
   const hours = (new Date(to.at) - new Date(from.at)) / 3_600_000;
   if (!Number.isFinite(hours) || hours <= 0) {
-    // Same instant, different places: infinite speed. Report a large finite
-    // number so downstream comparisons and JSON both behave.
-    return km > 1 ? Number.MAX_SAFE_INTEGER : 0;
+    return km > 1 ? SAME_INSTANT_KMH : 0;
   }
   return km / hours;
 }
 
 module.exports = {
   PUBLIC_PRECISION,
+  SAME_INSTANT_KMH,
   round,
   isValidLatLng,
   fromHeaders,
