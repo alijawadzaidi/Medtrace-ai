@@ -36,6 +36,11 @@ export default defineRailway(() => {
    */
   const medtraceApi = service("medtrace-api", {
     source: github(REPO, { branch: BRANCH, rootDirectory: "api" }),
+    // Explicit, because Railway's auto-detection ignores a Dockerfile it was
+    // not told about: the first build here used Railpack and produced an
+    // image that skipped everything the Dockerfile does, including generating
+    // the OpenAPI document that /docs serves.
+    build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile" },
     healthcheck: "/health",
     healthcheckTimeout: 30,
     preDeploy: "npx sequelize-cli db:migrate --env production",
@@ -66,6 +71,7 @@ export default defineRailway(() => {
    */
   const medtraceAi = service("medtrace-ai", {
     source: github(REPO, { branch: BRANCH, rootDirectory: "ai" }),
+    build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile" },
     healthcheck: "/health",
     healthcheckTimeout: 30,
     replicas: { iad: 1 },
@@ -79,6 +85,7 @@ export default defineRailway(() => {
    */
   const medtraceWeb = service("medtrace-web", {
     source: github(REPO, { branch: BRANCH, rootDirectory: "web" }),
+    build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile" },
     healthcheck: "/",
     healthcheckTimeout: 30,
     replicas: { iad: 1 },
