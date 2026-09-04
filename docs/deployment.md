@@ -98,7 +98,9 @@ build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile", watchPatterns: ["a
 ```
 
 On a usage-billed plan that distinction is money: without it every push pays to
-rebuild three images when one changed.
+rebuild three images when one changed. Verified — a commit touching only
+`docs/` now records `SKIPPED` against all three services instead of three
+builds.
 
 `railway up --service <name>` still works for a deploy from local files
 without a commit, which is how the stack was first brought up.
