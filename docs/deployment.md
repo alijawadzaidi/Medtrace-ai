@@ -38,6 +38,23 @@ you open the app before you present.
 Everything here is packaged with Dockerfiles rather than provider config, so
 switching hosts later costs a rebuild rather than a rewrite.
 
+## Setting it up
+
+The CLI is installed (`npm install -g @railway/cli`). Logging in needs a
+browser, so it is the one step that has to be done by hand:
+
+```bash
+railway login          # opens a browser
+railway init           # creates the project
+railway add --database mysql
+```
+
+Then one service per directory, each with its own `railway.json` pointing at
+its `Dockerfile`. The API's config runs `sequelize-cli db:migrate` as a
+pre-deploy step, so a version that cannot migrate never takes traffic —
+`sequelize-cli` is a production dependency for exactly this reason, since the
+image is built with `--omit=dev`.
+
 ## The order that matters
 
 Four things bite in a specific order. Do them in this one.

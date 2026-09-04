@@ -1,7 +1,7 @@
 {
   "name": "medtrace-api",
   "version": "0.1.0",
-  "description": "MedTrace AI — traceability API",
+  "description": "MedTrace AI \u2014 traceability API",
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/server.js",
@@ -37,6 +37,7 @@
     "mysql2": "^3.24.2",
     "qrcode": "^1.5.4",
     "sequelize": "^6.37.8",
+    "sequelize-cli": "^6.6.5",
     "sqlite3": "^6.0.1",
     "swagger-ui-dist": "^5.32.15",
     "zod": "^4.5.2"
@@ -47,7 +48,6 @@
     "globals": "^17.11.0",
     "jest": "^30.5.1",
     "nodemon": "^3.1.14",
-    "sequelize-cli": "^6.6.5",
     "supertest": "^7.2.2"
   }
 }
