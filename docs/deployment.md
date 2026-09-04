@@ -52,6 +52,9 @@ on the internet.
 
 ## What the first deployment taught us
 
+Five things broke. All five are worth knowing, because none of them show up
+locally.
+
 **The migrations run on MySQL.** All ten applied first time, in under a second.
 That had never been tested — every migration until now had only ever seen
 SQLite — so the portable-subset discipline held.
@@ -70,7 +73,33 @@ Infrastructure-as-Code file can express a per-service root directory.
 **Auto-deploy needs the Railway GitHub App installed on the repository.**
 Connecting a source records the repo name; it does not grant access to read it.
 Without the app, `serviceInstanceDeployV2` fails with *"No GitHub installation
-found"* and services sit at `NO DEPLOYMENT` forever.
+found"* and services sit at `NO DEPLOYMENT` forever. Until it is installed,
+`railway up --service <name>` uploads and deploys directly, which is how the
+current deployment was made.
+
+**A native dependency broke the image.** Generating the OpenAPI document loads
+the app, which builds a Sequelize instance, which fell back to SQLite and tried
+to load `sqlite3`'s native binding — compiled against a newer glibc than
+`node:24-slim` ships:
+
+```
+Error: /lib/x86_64-linux-gnu/libm.so.6: version `GLIBC_2.38' not found
+```
+
+`sqlite3` is a devDependency now, which it should always have been: a MySQL
+production image has no business carrying a native SQLite driver.
+
+**The production boot checks blocked the build, correctly.** With
+`NODE_ENV=production` set in the image, the same generator refused to run
+without a real `JWT_SECRET`. That is the guard doing its job — a build has no
+secrets and must not have any baked into a layer — so that one command runs
+with `NODE_ENV=development` while the runtime stays production.
+
+**Next.js standalone binds to localhost.** The web image built fine and never
+became healthy: the platform's health check comes from outside the container's
+loopback interface and got connection refused, while the app ran perfectly. It
+needs `HOSTNAME=0.0.0.0`. This is invisible locally, where every request comes
+from localhost anyway.
 
 ## Running commands against a live service
 
