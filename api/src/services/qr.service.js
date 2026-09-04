@@ -2,6 +2,8 @@
 
 const QRCode = require('qrcode');
 
+const env = require('../config/env');
+
 /**
  * QR payload design.
  *
@@ -17,7 +19,9 @@ const QRCode = require('qrcode');
  * Phase 8 (optional) appends an HMAC signature to this URL so a forged serial
  * fails before the database is touched. The shape below leaves room for it.
  */
-const VERIFY_BASE_URL = process.env.VERIFY_BASE_URL || 'http://localhost:3000/v';
+// Read through config so production refuses to boot without it, rather than
+// silently printing localhost onto a few thousand labels.
+const VERIFY_BASE_URL = env.verifyBaseUrl;
 
 function payloadFor(serial) {
   return `${VERIFY_BASE_URL.replace(/\/$/, '')}/${serial}`;

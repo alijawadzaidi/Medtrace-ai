@@ -159,7 +159,11 @@ function main() {
   const stack = app._router?.stack || app.router?.stack;
   if (!stack) throw new Error('Could not read the Express router stack.');
 
-  const routes = collectRoutes(stack).filter((r) => !r.path.includes('*'));
+  const routes = collectRoutes(stack)
+    .filter((r) => !r.path.includes('*'))
+    // Swagger UI's own static assets are how the reference is rendered, not
+    // part of the API it describes.
+    .filter((r) => !r.path.startsWith('/docs/assets'));
   const paths = {};
   const undocumented = [];
 

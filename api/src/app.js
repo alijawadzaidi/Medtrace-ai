@@ -18,7 +18,9 @@ app.set('trust proxy', 1); // correct client IPs behind a platform proxy
 app.disable('x-powered-by');
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+// In production CORS_ORIGIN must be set explicitly: a wildcard would let any
+// site on the internet call this API with a signed-in user's token attached.
+app.use(cors({ origin: env.corsOrigin }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 

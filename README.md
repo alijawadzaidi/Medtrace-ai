@@ -4,7 +4,9 @@ Medicine traceability and supply-chain platform with AI-based anomaly detection.
 Every pack of medicine carries its own serial and QR code, so a duplicate scan is
 evidence of a clone rather than ordinary traffic.
 
-See [`docs/medtrace-plan.md`](docs/medtrace-plan.md) for the full build plan.
+See [`docs/medtrace-plan.md`](docs/medtrace-plan.md) for the full build plan,
+[`docs/deployment.md`](docs/deployment.md) for how it is deployed, and
+[`docs/erd.md`](docs/erd.md) for the database schema.
 
 ## Structure
 

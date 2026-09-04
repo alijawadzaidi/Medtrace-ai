@@ -1,6 +1,7 @@
 'use strict';
 
 const features = require('./features.service');
+const env = require('../config/env');
 
 /**
  * The client for the Python scoring service.
@@ -15,7 +16,7 @@ const features = require('./features.service');
  * scorer that is broken, and waiting for it would turn one sick service into a
  * queue of stalled requests across the whole API.
  */
-const SCORER_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+const SCORER_URL = env.aiServiceUrl;
 const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 1500);
 
 /** Remembered so a long outage does not cost a timeout on every single call. */

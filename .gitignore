@@ -33,10 +33,15 @@ venv/
 #   node sim/export-features.js
 #   ai/.venv/bin/python ai/train.py
 #   node sim/evaluate.js
-*.joblib
 *.pkl
 ai/data/*.csv
 sim/labels.json
+
+# ai/model.joblib is deliberately NOT ignored. The scoring service is deployed
+# live, so the image needs a model, and it should be one that was trained and
+# evaluated on purpose — with the metrics in ai/metrics.json describing that
+# exact artifact — rather than whatever a build server happens to produce from
+# a database it should never have been reaching for.
 
 # logs
 logs/

@@ -9,7 +9,16 @@ const bcrypt = require('bcryptjs');
  * Seeders use bulkInsert, which bypasses the model's hashing hook, so the hash
  * is computed here explicitly.
  */
-const DEMO_PASSWORD = 'MedTrace#2026';
+/**
+ * The shared demo password, overridable for a deployed instance.
+ *
+ * `MedTrace#2026` is committed to a public repository, which is exactly right
+ * for a local clone and exactly wrong for a public URL: anyone who reads the
+ * repo could sign in as the regulator and recall a batch. Setting
+ * DEMO_PASSWORD before seeding a deployment keeps the demo accounts usable
+ * without publishing their credentials.
+ */
+const DEMO_PASSWORD = process.env.DEMO_PASSWORD || 'MedTrace#2026';
 
 const users = [
   { email: 'maker@meridian.example', fullName: 'Asha Rao', role: 'manufacturer', license: 'MFG-MH-100241' },

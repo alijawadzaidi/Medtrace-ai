@@ -14,16 +14,31 @@ const router = express.Router();
  * Read from disk per request rather than cached at boot, so regenerating the
  * spec during development shows up on a refresh. The file is small and this
  * route is not on any hot path.
+ *
+ * Two locations are checked because the document lives outside `api/` in the
+ * repository — where it belongs, next to the ER diagram — but a container
+ * image is built from `api/` alone and generates its own copy at build time.
+ * Checking both means the same code serves the reference in development and in
+ * production without a path that is wrong in one of them.
  */
-const SPEC_PATH = path.join(__dirname, '..', '..', '..', 'docs', 'openapi.json');
+const SPEC_CANDIDATES = [
+  process.env.OPENAPI_PATH,
+  path.join(__dirname, '..', '..', 'docs', 'openapi.json'), // inside the image
+  path.join(__dirname, '..', '..', '..', 'docs', 'openapi.json'), // in the repo
+].filter(Boolean);
+
+function findSpec() {
+  return SPEC_CANDIDATES.find((candidate) => fs.existsSync(candidate)) || null;
+}
 
 router.get('/docs/openapi.json', (_req, res) => {
-  if (!fs.existsSync(SPEC_PATH)) {
+  const specPath = findSpec();
+  if (!specPath) {
     return res.status(503).json({
       error: { message: 'No OpenAPI document. Generate it with: npm run docs:api' },
     });
   }
-  return res.type('application/json').send(fs.readFileSync(SPEC_PATH, 'utf8'));
+  return res.type('application/json').send(fs.readFileSync(specPath, 'utf8'));
 });
 
 /**
