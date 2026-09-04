@@ -21,7 +21,13 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN test -n "$NEXT_PUBLIC_API_URL" || (echo "NEXT_PUBLIC_API_URL build arg is required" && exit 1)
 
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+
+# `public/` may legitimately be empty, and git does not track empty
+# directories — so a build from the repository has no such directory and the
+# COPY in the runtime stage fails with "/app/public: not found". A local
+# upload includes the empty directory and succeeds, which is exactly the kind
+# of difference that only appears once deploys move to GitHub.
+RUN mkdir -p public && npm run build
 
 FROM base AS runtime
 ENV NODE_ENV=production \
