@@ -21,4 +21,10 @@ module.exports = [
       'no-var': 'error',
     },
   },
+  {
+    // The test suite needs Jest's globals; the rest of the codebase must not
+    // have them, or a stray `describe` in src/ would lint clean.
+    files: ['tests/**/*.js', 'jest.config.js'],
+    languageOptions: { globals: { ...globals.jest } },
+  },
 ];

@@ -23,6 +23,8 @@ Then: <http://localhost:4000/health>
 | `npm run db:migrate`  | apply pending migrations                   |
 | `npm run db:seed`     | insert demo organizations, users, catalogue and a supply chain |
 | `npm run db:reset`    | rebuild the database from scratch          |
+| `npm test`            | Jest + supertest integration suite          |
+| `npm run test:coverage` | the same, with a coverage report          |
 
 `db:reset` undoes **seeders first**, then migrations. Seeder runs are tracked in
 `sequelize_seeds`, and that table is not owned by any migration — so undoing
@@ -319,6 +321,40 @@ dispensed   Lotus Pharmacy             Delhi       28.535, 77.391
 Movements are bulk operations: a 2000-pack shipment writes 2000 scan events
 and updates 2000 packs in roughly 50 ms, and produces **one** audit row rather
 than 2000.
+
+## Tests
+
+```bash
+npm test
+```
+
+59 tests across five suites, run against SQLite in a database of their own,
+built from the **real migrations** rather than `sequelize.sync()` — syncing
+models would test a schema the deployment never sees, and a migration that no
+longer applies cleanly is exactly the failure worth catching.
+
+| Area | What it pins down |
+| ---- | ----------------- |
+| `auth.test.js` | A wrong password and an unknown email are indistinguishable; a deactivated account stops working immediately rather than at token expiry; scoping means *which* distributor, not *a* distributor |
+| `catalogue.test.js` | A failed batch creation leaves no orphaned packs; the check character rejects a typo without a query; another manufacturer's batch is a 404, never a 403 |
+| `custody.test.js` | Only the holder dispatches and only the destination receives; a pack cannot sit on two open shipments; recalled and expired stock cannot move; 40 packs produce one audit row, not eighty |
+| `verify.test.js` | An unknown serial is a 200 with a verdict, never a 404; a refresh does not inflate `scan_count` but a scan 1,100 km away always counts; coordinates are stored at ~1.1 km and addresses truncated |
+| `detection.test.js` | Rules fire with **no scoring service running**; one cloned pack produces one alert however often it is re-scanned; alerts stay closed to everyone but a regulator |
+
+Coverage: 82% of statements, 85% of lines.
+
+| | statements | lines |
+| --- | --- | --- |
+| `src/models` | 93% | 95% |
+| `src/routes` | 93% | 93% |
+| `src/services` | 87% | 90% |
+| `src/middleware` | 71% | 74% |
+| `src/controllers` | 61% | 67% |
+
+The suite runs with the Python scorer deliberately unreachable. That is not a
+limitation of the test environment — it is the case worth asserting, because
+the service is stateless precisely so that its absence degrades one feature
+instead of taking the system down.
 
 ## Detection
 
