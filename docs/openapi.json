@@ -1,0 +1,2204 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "MedTrace AI API",
+    "version": "0.1.0",
+    "description": "Medicine traceability with per-pack serialization.\n\nTwo things are worth knowing before reading the endpoints:\n\n- **`/verify` needs no account, ever.** A customer holding a box is the last\n  line of defence against a counterfeit, and any friction means they will not\n  check. An unknown serial returns `200` with a `counterfeit` verdict rather\n  than a `404`, because a 404 tells a counterfeiter which guesses were closer.\n- **A `404` often means \"not yours\".** Record lookups are organization-scoped,\n  so another company's batch is indistinguishable from one that does not\n  exist. A `403` would confirm it is real and let a competitor map the\n  catalogue by walking ids.\n\nThis document is generated from the live Express router by\n`api/scripts/generate-openapi.js`; request bodies come from the same Zod\nvalidators the middleware enforces."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4000",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Public verification",
+      "description": "Unauthenticated. The only surface a customer touches."
+    },
+    {
+      "name": "Authentication",
+      "description": "Staff identity and JWTs."
+    },
+    {
+      "name": "Organizations",
+      "description": "Scoping: which distributor, not a distributor."
+    },
+    {
+      "name": "Catalogue",
+      "description": "Medicines, batches, and per-pack serials."
+    },
+    {
+      "name": "Custody",
+      "description": "Shipments and the chain-of-custody state machine."
+    },
+    {
+      "name": "Detection",
+      "description": "Rules, the model, and the regulator triage queue."
+    },
+    {
+      "name": "Audit",
+      "description": "Every write, attributed."
+    },
+    {
+      "name": "Operations",
+      "description": "Liveness and readiness."
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            },
+            "required": [
+              "message"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "tags": [
+          "General"
+        ],
+        "summary": "Service banner and endpoint index",
+        "description": "**Access:** public",
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/alerts": {
+      "get": {
+        "tags": [
+          "Detection"
+        ],
+        "summary": "Triage queue, worst first",
+        "description": "**Access:** regulator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/alerts/{id}": {
+      "get": {
+        "tags": [
+          "Detection"
+        ],
+        "summary": "One alert with the features behind it",
+        "description": "**Access:** regulator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Detection"
+        ],
+        "summary": "Confirm, dismiss, or take up an alert",
+        "description": "**Access:** regulator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "open",
+                      "investigating",
+                      "confirmed",
+                      "dismissed"
+                    ]
+                  },
+                  "resolutionNote": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/audit-logs": {
+      "get": {
+        "tags": [
+          "Audit"
+        ],
+        "summary": "Audit trail, filterable by entity and action",
+        "description": "**Access:** regulator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Exchange credentials for a JWT",
+        "description": "**Access:** public",
+        "security": [],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "email",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "The signed-in user and their organization",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Update your own name or password",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "fullName": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 72
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Create an account against an organization",
+        "description": "**Access:** public",
+        "security": [],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "fullName": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 72
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "manufacturer",
+                      "distributor",
+                      "pharmacy",
+                      "regulator"
+                    ]
+                  },
+                  "organizationId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "fullName",
+                  "email",
+                  "password",
+                  "role",
+                  "organizationId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/batches": {
+      "get": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Your batches; regulators see all",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Create a batch and every one of its packs, atomically",
+        "description": "**Access:** manufacturer",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "medicineId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "batchNo": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9/-]+$"
+                  },
+                  "manufacturedOn": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "expiresOn": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "quantity": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5000
+                  }
+                },
+                "required": [
+                  "medicineId",
+                  "batchNo",
+                  "manufacturedOn",
+                  "expiresOn",
+                  "quantity"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/batches/{id}": {
+      "get": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Batch detail with pack completeness",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/batches/{id}/labels": {
+      "get": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Print-ready label sheet (HTML)",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/batches/{id}/packs": {
+      "get": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Paginated serial list",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/batches/{id}/recall": {
+      "post": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Recall a batch and every pack in it",
+        "description": "**Access:** regulator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 255
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/detection/health": {
+      "get": {
+        "tags": [
+          "Detection"
+        ],
+        "summary": "Whether the scoring service is reachable",
+        "description": "**Access:** regulator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/detection/run": {
+      "post": {
+        "tags": [
+          "Detection"
+        ],
+        "summary": "Score every pack, or one batch",
+        "description": "**Access:** regulator",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "batchId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 20000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/docs": {
+      "get": {
+        "tags": [
+          "General"
+        ],
+        "summary": "This API reference",
+        "description": "**Access:** public",
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/docs/openapi.json": {
+      "get": {
+        "tags": [
+          "General"
+        ],
+        "summary": "The OpenAPI document itself",
+        "description": "**Access:** public",
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Liveness — never touches the database",
+        "description": "**Access:** public",
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Readiness — 503 when the database is unreachable",
+        "description": "**Access:** public",
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/medicines": {
+      "get": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Your catalogue; regulators see all",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Register a product",
+        "description": "**Access:** manufacturer",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 160
+                  },
+                  "genericName": {
+                    "type": "string",
+                    "maxLength": 160
+                  },
+                  "strength": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  },
+                  "form": {
+                    "type": "string",
+                    "enum": [
+                      "tablet",
+                      "capsule",
+                      "syrup",
+                      "injection",
+                      "ointment",
+                      "drops",
+                      "inhaler"
+                    ]
+                  },
+                  "packSize": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                },
+                "required": [
+                  "name",
+                  "strength",
+                  "form"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/medicines/{id}": {
+      "get": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "One product",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Update your own product",
+        "description": "**Access:** manufacturer",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 160
+                  },
+                  "genericName": {
+                    "type": "string",
+                    "maxLength": 160
+                  },
+                  "strength": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  },
+                  "form": {
+                    "type": "string",
+                    "enum": [
+                      "tablet",
+                      "capsule",
+                      "syrup",
+                      "injection",
+                      "ointment",
+                      "drops",
+                      "inhaler"
+                    ]
+                  },
+                  "packSize": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Deactivate a product — never deletes",
+        "description": "**Access:** manufacturer",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/organizations": {
+      "get": {
+        "tags": [
+          "Organizations"
+        ],
+        "summary": "Your own organization; regulators see all",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/organizations/{id}": {
+      "get": {
+        "tags": [
+          "Organizations"
+        ],
+        "summary": "One organization; 403 across organizations",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/organizations/partners": {
+      "get": {
+        "tags": [
+          "Organizations"
+        ],
+        "summary": "Who the custody rules let you ship to",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/packs/{serial}": {
+      "get": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Pack detail — your own or ones you hold",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "A MedTrace pack serial, case and dash insensitive."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/packs/{serial}/dispense": {
+      "post": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Terminal step — hand the pack to a patient",
+        "description": "**Access:** pharmacy",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "A MedTrace pack serial, case and dash insensitive."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/packs/{serial}/history": {
+      "get": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Full chain of custody",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "A MedTrace pack serial, case and dash insensitive."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/packs/{serial}/qr.png": {
+      "get": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "QR image, rendered on demand",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "A MedTrace pack serial, case and dash insensitive."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/shipments": {
+      "get": {
+        "tags": [
+          "Custody"
+        ],
+        "summary": "Your inbound and outbound shipments",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Custody"
+        ],
+        "summary": "Create a draft shipment",
+        "description": "**Access:** manufacturer, distributor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "toOrganizationId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "serials": {
+                    "minItems": 1,
+                    "maxItems": 2000,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "carrier": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "toOrganizationId",
+                  "serials"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/shipments/{id}": {
+      "get": {
+        "tags": [
+          "Custody"
+        ],
+        "summary": "Shipment detail with its packs",
+        "description": "**Access:** any role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/shipments/{id}/cancel": {
+      "post": {
+        "tags": [
+          "Custody"
+        ],
+        "summary": "Cancel a draft",
+        "description": "**Access:** the sending organization",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/shipments/{id}/dispatch": {
+      "post": {
+        "tags": [
+          "Custody"
+        ],
+        "summary": "Packs leave — state becomes in_transit",
+        "description": "**Access:** the sending organization",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/shipments/{id}/receive": {
+      "post": {
+        "tags": [
+          "Custody"
+        ],
+        "summary": "Packs arrive — custody moves",
+        "description": "**Access:** the destination organization",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No or invalid token"
+          },
+          "403": {
+            "description": "Wrong role, or another organization's record"
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/verify": {
+      "post": {
+        "tags": [
+          "Public verification"
+        ],
+        "summary": "Public verification with browser-granted coordinates",
+        "description": "**Access:** none",
+        "security": [],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "serial": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "latitude": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "longitude": {
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180
+                  }
+                },
+                "required": [
+                  "serial"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/verify/{serial}": {
+      "get": {
+        "tags": [
+          "Public verification"
+        ],
+        "summary": "Public verification — what a scanned QR code opens",
+        "description": "**Access:** none",
+        "security": [],
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "A MedTrace pack serial, case and dash insensitive."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    },
+    "/verify/{serial}/qr.png": {
+      "get": {
+        "tags": [
+          "Public verification"
+        ],
+        "summary": "QR image for a printed label",
+        "description": "**Access:** none",
+        "security": [],
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "A MedTrace pack serial, case and dash insensitive."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found — also returned for records outside your organization"
+          }
+        }
+      }
+    }
+  }
+}

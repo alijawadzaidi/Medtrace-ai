@@ -3,6 +3,7 @@
 const express = require('express');
 
 const healthRoutes = require('./health.routes');
+const docsRoutes = require('./docs.routes');
 const authRoutes = require('./auth.routes');
 const organizationRoutes = require('./organization.routes');
 const catalogueRoutes = require('./catalogue.routes');
@@ -14,6 +15,7 @@ const auditLogRoutes = require('./auditLog.routes');
 const router = express.Router();
 
 router.use(healthRoutes);
+router.use(docsRoutes);
 router.use(authRoutes);
 router.use(organizationRoutes);
 router.use(catalogueRoutes);
@@ -25,7 +27,7 @@ router.use(auditLogRoutes);
 router.get('/', (_req, res) => {
   res.json({
     service: 'MedTrace AI API',
-    docs: '/docs (Phase 7)',
+    docs: '/docs',
     endpoints: [
       'GET  /health',
       'GET  /health/ready',

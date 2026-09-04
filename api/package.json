@@ -1,7 +1,7 @@
 {
   "name": "medtrace-api",
   "version": "0.1.0",
-  "description": "MedTrace AI \u2014 traceability API",
+  "description": "MedTrace AI — traceability API",
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/server.js",
@@ -15,7 +15,10 @@
     "db:reset": "sequelize-cli db:seed:undo:all && sequelize-cli db:migrate:undo:all && sequelize-cli db:migrate && sequelize-cli db:seed:all",
     "test": "NODE_ENV=test jest",
     "test:watch": "NODE_ENV=test jest --watch",
-    "test:coverage": "NODE_ENV=test jest --coverage"
+    "test:coverage": "NODE_ENV=test jest --coverage",
+    "docs:erd": "node scripts/generate-erd.js",
+    "docs:api": "node scripts/generate-openapi.js",
+    "docs": "npm run docs:erd && npm run docs:api"
   },
   "keywords": [],
   "author": "",
@@ -35,6 +38,7 @@
     "qrcode": "^1.5.4",
     "sequelize": "^6.37.8",
     "sqlite3": "^6.0.1",
+    "swagger-ui-dist": "^5.32.15",
     "zod": "^4.5.2"
   },
   "devDependencies": {

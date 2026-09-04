@@ -25,6 +25,7 @@ Then: <http://localhost:4000/health>
 | `npm run db:reset`    | rebuild the database from scratch          |
 | `npm test`            | Jest + supertest integration suite          |
 | `npm run test:coverage` | the same, with a coverage report          |
+| `npm run docs`        | regenerate the ER diagram and OpenAPI spec  |
 
 `db:reset` undoes **seeders first**, then migrations. Seeder runs are tracked in
 `sequelize_seeds`, and that table is not owned by any migration — so undoing
@@ -59,6 +60,8 @@ Then `npm run db:reset`. No application code changes.
 | Method | Path                 | Auth      | Description                            |
 | ------ | -------------------- | --------- | -------------------------------------- |
 | GET    | `/`                  | public    | Service banner                         |
+| GET    | `/docs`              | public    | **Swagger UI API reference**           |
+| GET    | `/docs/openapi.json` | public    | The OpenAPI 3.1 document               |
 | GET    | `/health`            | public    | Liveness — never touches the database  |
 | GET    | `/health/ready`      | public    | Readiness — 503 if the database is down |
 | POST   | `/auth/register`     | public    | Create an account against an organization |
@@ -321,6 +324,31 @@ dispensed   Lotus Pharmacy             Delhi       28.535, 77.391
 Movements are bulk operations: a 2000-pack shipment writes 2000 scan events
 and updates 2000 packs in roughly 50 ms, and produces **one** audit row rather
 than 2000.
+
+## Documentation is generated, not written
+
+```bash
+npm run docs        # -> ../docs/erd.md and ../docs/openapi.json
+```
+
+Both artifacts are read out of the running system, because the hand-written
+versions are wrong within a week — someone adds a column or an endpoint, and
+the document in the report keeps describing week three.
+
+- **`docs/erd.md`** is built from the live schema (`queryInterface.describeTable`)
+  with relationships taken from the model associations, and rendered as Mermaid
+  so GitHub displays it inline.
+- **`docs/openapi.json`** is built by walking the mounted Express router, so an
+  endpoint cannot exist without appearing in it. Request bodies are converted
+  from the same Zod validators the middleware enforces, so the documented shape
+  *is* the validated shape. Any route with no prose entry is reported by the
+  generator rather than silently shipped undescribed.
+
+Swagger UI at `/docs` is served from the installed package rather than a CDN.
+The first version loaded it from unpkg and rendered a blank page, because
+`helmet` sets `script-src 'self'` and the browser refused the script. Serving
+it locally keeps the header strict for every route *and* means the reference
+works with no internet — which matters more on demo day than it sounds.
 
 ## Tests
 
