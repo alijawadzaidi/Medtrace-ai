@@ -73,9 +73,12 @@ Infrastructure-as-Code file can express a per-service root directory.
 **Auto-deploy needs the Railway GitHub App installed on the repository.**
 Connecting a source records the repo name; it does not grant access to read it.
 Without the app, `serviceInstanceDeployV2` fails with *"No GitHub installation
-found"* and services sit at `NO DEPLOYMENT` forever. Until it is installed,
-`railway up --service <name>` uploads and deploys directly, which is how the
-current deployment was made.
+found"* and services sit at `NO DEPLOYMENT` forever. It is installed now, so a
+push to `main` deploys any service whose root directory changed — and only
+those, which is why a commit touching just `docs/` rebuilds nothing.
+
+`railway up --service <name>` still works for a deploy from local files
+without a commit, which is how the stack was first brought up.
 
 **A native dependency broke the image.** Generating the OpenAPI document loads
 the app, which builds a Sequelize instance, which fell back to SQLite and tried
