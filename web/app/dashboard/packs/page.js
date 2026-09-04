@@ -108,7 +108,10 @@ export default function PackLookupPage() {
             title="Chain of custody"
             action={
               <a
-                href={`${API_URL}/packs/${encodeURIComponent(pack.serial)}/qr.png`}
+                // The public route, not the staff one: a plain link cannot
+                // send a bearer token, so /packs/:serial/qr.png answered 401.
+                // The QR is printed on the box and was never a secret anyway.
+                href={`${API_URL}/verify/${encodeURIComponent(pack.serial)}/qr.png`}
                 target="_blank"
                 rel="noreferrer"
                 className="text-xs font-medium text-brand"

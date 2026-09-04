@@ -21,6 +21,38 @@ export default function BatchDetailPage({ params }) {
   const packs = useApi(`/batches/${id}/packs?limit=50`);
   const [action, setAction] = useState({ busy: false, error: null });
   const [reason, setReason] = useState('');
+  const [labels, setLabels] = useState({ busy: false, error: null });
+
+  /**
+   * The label sheet is fetched, not linked to.
+   *
+   * It was a plain anchor, which cannot carry an Authorization header, so it
+   * opened a 401 page — and a batch's label sheet lists every serial in the
+   * batch, so making the route public is not the fix. The window is opened
+   * synchronously before the await, because a popup blocker will stop
+   * `window.open` called from an async callback.
+   */
+  async function openLabelSheet() {
+    const printWindow = window.open('', '_blank');
+    setLabels({ busy: true, error: null });
+
+    try {
+      const response = await fetch(`${API_URL}/batches/${id}/labels`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error(`Could not load the label sheet (${response.status})`);
+
+      const html = await response.text();
+      if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+      }
+      setLabels({ busy: false, error: null });
+    } catch (error) {
+      if (printWindow) printWindow.close();
+      setLabels({ busy: false, error });
+    }
+  }
 
   if (batch.loading) return <Loading label="Loading batch…" />;
   if (batch.error) return <ErrorNote error={batch.error} />;
@@ -84,14 +116,14 @@ export default function BatchDetailPage({ params }) {
       <Card
         title="Labels and serials"
         action={
-          <a
-            href={`${API_URL}/batches/${id}/labels`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs font-medium text-brand"
+          <button
+            type="button"
+            onClick={openLabelSheet}
+            disabled={labels.busy}
+            className="text-xs font-medium text-brand disabled:opacity-50"
           >
-            Print label sheet →
-          </a>
+            {labels.busy ? 'Preparing…' : 'Print label sheet →'}
+          </button>
         }
       >
         {packs.loading ? (
@@ -102,6 +134,7 @@ export default function BatchDetailPage({ params }) {
           <Empty>No packs.</Empty>
         ) : (
           <>
+            <ErrorNote error={labels.error} className="mb-3" />
             <p className="mb-3 text-xs text-muted">
               Showing {packs.data.packs.length} of {packs.data.total}. Each serial is
               unguessable and self-checking — a typo fails before the database is touched.
