@@ -57,3 +57,6 @@ npm-debug.log*
 # coverage
 coverage/
 .nyc_output/
+
+# Root workspace exists only for the Railway IaC SDK
+/node_modules

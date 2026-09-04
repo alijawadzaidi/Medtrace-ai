@@ -1,0 +1,8 @@
+{
+  "name": "medtrace",
+  "private": true,
+  "description": "Root workspace. Holds only the Railway infrastructure-as-code SDK, which .railway/railway.ts imports for its types.",
+  "devDependencies": {
+    "railway": "^3.11.0"
+  }
+}
