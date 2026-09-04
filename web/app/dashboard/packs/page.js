@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { API_URL, api } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { formatDateTime, eventLabel } from '@/lib/format';
+import JourneyMap from '@/components/JourneyMap';
 import { Badge, Button, Card, ErrorNote, Input, Stat } from '@/components/ui';
 
 /**
@@ -98,6 +99,10 @@ export default function PackLookupPage() {
               }}
             />
           )}
+
+          <Card title="Journey">
+            <JourneyMap history={state.data.history} />
+          </Card>
 
           <Card
             title="Chain of custody"

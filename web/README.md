@@ -28,6 +28,7 @@ of them is `MedTrace#2026`.
 | `/dashboard/batches/<id>` | manufacturer, regulator | Serials, label sheet, recall |
 | `/dashboard/shipments` | all staff | Create, dispatch, receive, cancel |
 | `/dashboard/packs` | all staff | Serial lookup, custody history, dispense |
+| `/dashboard/alerts` | regulator | Alert triage — rules and model findings, worst first |
 | `/dashboard/audit` | regulator | Audit trail |
 
 ## Decisions worth knowing
@@ -65,6 +66,14 @@ second when the first is true would be dangerous.
 identical to a colour-blind reader, so every verdict states its status in
 words. Text on saturated fills uses `text-background` rather than white, so it
 stays legible when the dark theme flips the brand colour to a pale teal.
+
+**The journey map is drawn from coordinates, not tiles.** Leaflet with
+OpenStreetMap tiles would look more impressive and would go blank the moment
+the venue wifi does — which the build plan flags as the likeliest demo failure.
+`components/JourneyMap.js` draws only what the database holds: positions in
+order, with a graticule and a scale bar for context, and longitude compressed
+by cos(latitude) so east-west distances are not stretched. It says on screen
+that it is a schematic rather than a survey.
 
 **Tokens live in `localStorage`.** The API issues bearer JWTs, so that is what
 the client stores. An httpOnly cookie would be safer — anything that can run
