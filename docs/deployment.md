@@ -38,6 +38,53 @@ you open the app before you present.
 Everything here is packaged with Dockerfiles rather than provider config, so
 switching hosts later costs a rebuild rather than a rewrite.
 
+## The live deployment
+
+| Service | URL |
+| ------- | --- |
+| API | <https://medtrace-api-production.up.railway.app> |
+| Web | <https://medtrace-web-production.up.railway.app> |
+| Scorer | internal only — `http://medtrace-ai.railway.internal:8000` |
+
+The scorer has no public domain on purpose. Nothing outside the project needs
+to reach it, and a service that holds no data and answers no user should not be
+on the internet.
+
+## What the first deployment taught us
+
+**The migrations run on MySQL.** All ten applied first time, in under a second.
+That had never been tested — every migration until now had only ever seen
+SQLite — so the portable-subset discipline held.
+
+**Railway ignores a Dockerfile it was not told about.** The first API build
+used Railpack auto-detection and produced an image that skipped everything the
+Dockerfile does, which is why `/docs` returned 503: the OpenAPI document is
+generated during the Docker build and Railpack never ran that step. The
+builder is now pinned explicitly in `.railway/railway.ts`.
+
+**A monorepo needs `rootDirectory` per service.** `railway up` from inside
+`api/` still uploads the repository root, Railway finds four language
+ecosystems side by side, and the build fails before it starts. Only the
+Infrastructure-as-Code file can express a per-service root directory.
+
+**Auto-deploy needs the Railway GitHub App installed on the repository.**
+Connecting a source records the repo name; it does not grant access to read it.
+Without the app, `serviceInstanceDeployV2` fails with *"No GitHub installation
+found"* and services sit at `NO DEPLOYMENT` forever.
+
+## Running commands against a live service
+
+```bash
+railway ssh keys add                                    # once, registers your key
+ssh-keyscan -t ed25519 ssh.railway.com >> ~/.ssh/known_hosts   # once
+
+railway ssh --service medtrace-api "npx sequelize-cli db:migrate --env production"
+railway ssh --service medtrace-api "npx sequelize-cli db:seed:all --env production"
+```
+
+This is how the database was first migrated and seeded. Afterwards the
+pre-deploy command handles migrations on every release.
+
 ## Setting it up
 
 The CLI is installed (`npm install -g @railway/cli`). Logging in needs a
