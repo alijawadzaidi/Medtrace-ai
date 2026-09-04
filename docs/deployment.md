@@ -73,9 +73,24 @@ Infrastructure-as-Code file can express a per-service root directory.
 **Auto-deploy needs the Railway GitHub App installed on the repository.**
 Connecting a source records the repo name; it does not grant access to read it.
 Without the app, `serviceInstanceDeployV2` fails with *"No GitHub installation
-found"* and services sit at `NO DEPLOYMENT` forever. It is installed now, so a
-push to `main` deploys any service whose root directory changed — and only
-those, which is why a commit touching just `docs/` rebuilds nothing.
+found"* and services sit at `NO DEPLOYMENT` forever. It is installed now.
+
+**Connecting a source is still not enough for push-to-deploy.** A service can
+have a GitHub repo and build from it on demand while ignoring every push,
+because the thing that listens for pushes is a separate *deployment trigger*:
+
+```graphql
+mutation {
+  deploymentTriggerCreate(input: {
+    branch: "main", provider: "github", repository: "owner/repo",
+    rootDirectory: "api", projectId: "...", environmentId: "...", serviceId: "..."
+  }) { id }
+}
+```
+
+One per service, each with its own `rootDirectory`, so a push rebuilds only the
+services whose files actually changed — a commit touching just `docs/` rebuilds
+nothing.
 
 `railway up --service <name>` still works for a deploy from local files
 without a commit, which is how the stack was first brought up.
