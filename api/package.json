@@ -38,7 +38,6 @@
     "qrcode": "^1.5.4",
     "sequelize": "^6.37.8",
     "sequelize-cli": "^6.6.5",
-    "sqlite3": "^6.0.1",
     "swagger-ui-dist": "^5.32.15",
     "zod": "^4.5.2"
   },
@@ -48,6 +47,7 @@
     "globals": "^17.11.0",
     "jest": "^30.5.1",
     "nodemon": "^3.1.14",
+    "sqlite3": "^6.0.1",
     "supertest": "^7.2.2"
   }
 }

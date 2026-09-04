@@ -22,7 +22,12 @@ COPY scripts ./scripts
 # walking the Express router, needs no database, and generating it inside the
 # image guarantees the reference served at /docs describes the code in *this*
 # image rather than whatever was last committed.
-RUN node scripts/generate-openapi.js --out ./docs/openapi.json
+# DB_DIALECT is set for this one command because generating the document loads
+# the app, which constructs a Sequelize instance. Without it the config falls
+# back to SQLite and Sequelize tries to load a native driver that is not in
+# this image — and should not be: sqlite3 is a development convenience, and a
+# MySQL production image has no business carrying it.
+RUN DB_DIALECT=mysql node scripts/generate-openapi.js --out ./docs/openapi.json
 
 # Never root: a compromised container should not also be a privileged one.
 USER node

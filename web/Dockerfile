@@ -25,7 +25,13 @@ RUN npm run build
 
 FROM base AS runtime
 ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    # Next's standalone server binds to localhost unless told otherwise, which
+    # is invisible locally and fatal in a container: the platform's health
+    # check comes from outside the loopback interface and gets connection
+    # refused, so the deploy is marked unhealthy while the app is running fine.
+    HOSTNAME=0.0.0.0
 
 # The standalone output ships only the files the server actually needs.
 COPY --from=builder /app/.next/standalone ./
