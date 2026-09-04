@@ -40,7 +40,15 @@ export default defineRailway(() => {
     // not told about: the first build here used Railpack and produced an
     // image that skipped everything the Dockerfile does, including generating
     // the OpenAPI document that /docs serves.
-    build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile" },
+    // `rootDirectory` decides what gets built; `watchPatterns` decides what
+    // triggers a build. Without the patterns every push rebuilds all three
+    // services — including a commit that only touched docs — which on a
+    // usage-billed plan is money spent rebuilding things that did not change.
+    build: {
+      builder: "DOCKERFILE",
+      dockerfilePath: "Dockerfile",
+      watchPatterns: ["api/**"],
+    },
     healthcheck: "/health",
     healthcheckTimeout: 30,
     preDeploy: "npx sequelize-cli db:migrate --env production",
@@ -71,7 +79,11 @@ export default defineRailway(() => {
    */
   const medtraceAi = service("medtrace-ai", {
     source: github(REPO, { branch: BRANCH, rootDirectory: "ai" }),
-    build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile" },
+    build: {
+      builder: "DOCKERFILE",
+      dockerfilePath: "Dockerfile",
+      watchPatterns: ["ai/**"],
+    },
     healthcheck: "/health",
     healthcheckTimeout: 30,
     replicas: { iad: 1 },
@@ -85,7 +97,11 @@ export default defineRailway(() => {
    */
   const medtraceWeb = service("medtrace-web", {
     source: github(REPO, { branch: BRANCH, rootDirectory: "web" }),
-    build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile" },
+    build: {
+      builder: "DOCKERFILE",
+      dockerfilePath: "Dockerfile",
+      watchPatterns: ["web/**"],
+    },
     healthcheck: "/",
     healthcheckTimeout: 30,
     replicas: { iad: 1 },

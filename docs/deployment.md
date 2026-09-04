@@ -88,9 +88,17 @@ mutation {
 }
 ```
 
-One per service, each with its own `rootDirectory`, so a push rebuilds only the
-services whose files actually changed — a commit touching just `docs/` rebuilds
-nothing.
+One per service. But `rootDirectory` only decides *what gets built*, not *what
+triggers a build*: with triggers alone, a commit touching nothing but `docs/`
+rebuilt all three services. Filtering is a separate setting, `watchPatterns`,
+in each service's build config:
+
+```ts
+build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile", watchPatterns: ["api/**"] }
+```
+
+On a usage-billed plan that distinction is money: without it every push pays to
+rebuild three images when one changed.
 
 `railway up --service <name>` still works for a deploy from local files
 without a commit, which is how the stack was first brought up.
