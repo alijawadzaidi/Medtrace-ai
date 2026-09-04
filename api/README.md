@@ -188,6 +188,28 @@ Three rules shape the response.
   reads. Responses are `Cache-Control: no-store`; caching them would erase the
   duplicate-scan signal the whole project rests on.
 
+### What earlier scans establish
+
+A verdict is not computed from the scan in front of it alone. A pack with a
+standing "seen in two places at once" finding used to read *Genuine* to the
+next customer, because their own scan looked ordinary — the clone had been
+detected, recorded, and then not mentioned to the one person holding the box.
+
+Which findings are allowed to speak to the public is a deliberate split, and
+the measured precision is the reason:
+
+- **Deterministic rules warn immediately**, triaged or not. They run at 1.00
+  precision and each states a physical contradiction anyone can check.
+  Waiting for triage would mean telling customers a known-cloned pack is fine
+  for as long as the queue is.
+- **The model waits to be confirmed by a regulator.** It runs at 0.60
+  precision, so two in five of its flags are honest packs. Telling those
+  customers their medicine is counterfeit, on an unreviewed machine score,
+  would do more harm than the frauds it catches.
+
+Public wording is rewritten for the person holding the box: no serials, no
+speeds, no internal rule names.
+
 ### Verdicts
 
 Reported worst-first: the first that applies wins.

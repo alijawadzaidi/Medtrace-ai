@@ -1,6 +1,7 @@
 'use strict';
 
 const { app, db, request, createWorld, createBatch, ship } = require('./helpers/fixtures');
+const detection = require('../src/services/detection.service');
 
 /**
  * Public verification: the only unauthenticated surface in the system.
@@ -174,5 +175,66 @@ describe('public verification', () => {
     // The scan event *is* the record. Auditing public scans would duplicate
     // the entire public traffic of the system into a staff-actions table.
     expect(await db.AuditLog.count()).toBe(before);
+  });
+});
+
+describe('what earlier scans established', () => {
+  let world;
+
+  beforeAll(async () => {
+    world = await createWorld();
+  });
+
+  it('warns every later customer once a clone has been detected', async () => {
+    const { serials } = await createBatch(world, { quantity: 1 });
+    const serial = serials[0];
+
+    // One serial, two cities, moments apart.
+    await request(app).post('/verify').send({ serial, latitude: 19.07, longitude: 72.87 });
+    await request(app).post('/verify').send({ serial, latitude: 28.61, longitude: 77.21 });
+
+    const pack = await db.Pack.findOne({ where: { serial } });
+    await detection.evaluatePacks([pack.id]);
+
+    // A later scan that looks perfectly ordinary on its own. Before this, it
+    // read "Genuine" — the clone had been detected, recorded, and then not
+    // mentioned to the one person holding the box.
+    const later = await request(app).post('/verify').send({
+      serial,
+      latitude: 28.62,
+      longitude: 77.22,
+    });
+
+    expect(later.body.verdict).toBe('suspect');
+    expect(later.body.warnings.map((w) => w.code)).toContain('impossible_travel');
+    // Customer-facing wording: no serials, no speeds, no internal rule names.
+    const message = later.body.warnings.find((w) => w.code === 'impossible_travel').message;
+    expect(message).not.toMatch(/km\/h|MT-/);
+  });
+
+  it('keeps an unconfirmed model flag away from the public', async () => {
+    const { serials } = await createBatch(world, { quantity: 1 });
+    const pack = await db.Pack.findOne({ where: { serial: serials[0] } });
+
+    await db.Alert.create({
+      packId: pack.id,
+      batchId: pack.batchId,
+      rule: 'anomaly_score',
+      severity: 'critical',
+      status: 'open',
+      summary: 'Model flagged this pack',
+      score: 0.97,
+    });
+
+    const response = await request(app).get(`/verify/${serials[0]}`);
+
+    // The model runs at 0.60 precision. Telling two in five honest customers
+    // their medicine is counterfeit, on an unreviewed machine score, would do
+    // more harm than the frauds it catches.
+    expect(response.body.verdict).toBe('genuine');
+
+    await db.Alert.update({ status: 'confirmed' }, { where: { packId: pack.id } });
+    const afterTriage = await request(app).get(`/verify/${serials[0]}`);
+    expect(afterTriage.body.verdict).toBe('suspect');
   });
 });

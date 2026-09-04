@@ -2,7 +2,7 @@
 
 const { Op } = require('sequelize');
 
-const { sequelize, Pack, Batch, Medicine, Organization, ScanEvent } = require('../models');
+const { sequelize, Pack, Batch, Medicine, Organization, ScanEvent, Alert } = require('../models');
 const serialService = require('./serial.service');
 const geo = require('./geo.service');
 
@@ -27,6 +27,59 @@ const geo = require('./geo.service');
  *    the training signal for Phase 6 — a serial scanned in two cities an hour
  *    apart has been cloned, and the only way to know is to have recorded both.
  */
+
+/**
+ * What the system already knows about this pack, from earlier scans.
+ *
+ * Without this, a verdict is computed only from the evidence of the scan in
+ * front of it — so a pack with a standing "seen in two places at once" alert
+ * reads as *Genuine* to the next customer, because their own scan looks
+ * ordinary. The clone was detected, recorded, and then not mentioned to the
+ * one person holding the box.
+ *
+ * Which alerts are allowed to speak to the public is a deliberate split:
+ *
+ * - **Deterministic rules warn immediately**, open or not. They are precise —
+ *   1.00 precision against the labelled set — and each states a physical
+ *   contradiction a person can check. Waiting for triage would mean telling
+ *   customers a known-cloned pack is fine for however long the queue is.
+ * - **The model waits to be confirmed.** It runs at 0.60 precision, so two in
+ *   five of its flags are honest packs. Telling those customers their
+ *   medicine is counterfeit on an unreviewed machine score would do more harm
+ *   than the frauds it catches.
+ */
+const PUBLIC_RULES = [
+  'impossible_travel',
+  'dispensed_elsewhere',
+  'recalled_in_circulation',
+];
+
+async function standingAlerts(packId) {
+  const alerts = await Alert.findAll({
+    where: {
+      packId,
+      status: { [Op.in]: ['open', 'investigating', 'confirmed'] },
+      severity: 'critical',
+    },
+    attributes: ['rule', 'status'],
+  });
+
+  return alerts.filter(
+    (alert) => PUBLIC_RULES.includes(alert.rule) || alert.status === 'confirmed'
+  );
+}
+
+/** Regulator-facing summaries name serials and speeds; customers need neither. */
+const PUBLIC_ALERT_TEXT = {
+  impossible_travel:
+    'This serial has been verified in two places too far apart for one box to have travelled between them. That usually means the label was copied.',
+  dispensed_elsewhere:
+    'This serial was dispensed to a patient somewhere else. If you have just bought it sealed, the label may have been copied.',
+  recalled_in_circulation:
+    'This pack belongs to a batch that was withdrawn, and it is still moving through the supply chain.',
+  anomaly_score:
+    'An inspector has confirmed that this pack does not behave like an ordinary one.',
+};
 
 /** Verdicts, worst first. The first one that applies is the one reported. */
 const VERDICTS = {
@@ -233,9 +286,22 @@ async function verify(rawSerial, { position = null, ipAddress = null, userAgent 
   const lastPositioned = [...events].reverse().find((e) => e.latitude != null) || null;
   const warnings = evaluateRules({ pack, lastPositioned, position, now });
 
+  // What earlier scans established, which this scan alone cannot see.
+  const standing = await standingAlerts(pack.id);
+  for (const alert of standing) {
+    if (warnings.some((w) => w.code === alert.rule)) continue;
+    warnings.push({
+      code: alert.rule,
+      severity: 'critical',
+      message: PUBLIC_ALERT_TEXT[alert.rule] || 'This pack has been flagged for investigation.',
+    });
+  }
+
   const recalled = pack.batch.status === 'recalled';
   const expired = pack.batch.isExpired(now);
-  const cloned = warnings.some((w) => w.code === 'impossible_travel');
+  const cloned = warnings.some(
+    (w) => w.severity === 'critical' && w.code !== 'recalled_in_circulation'
+  );
 
   let verdict = 'genuine';
   if (recalled) verdict = 'recalled';
